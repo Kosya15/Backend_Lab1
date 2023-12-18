@@ -18,3 +18,8 @@ cd Backend_Lab1
 Збілдіть docker-compose файл кодом ```docker-compose build ```
 
 Запустіть контейнер використовуючи ```docker-compose up```
+
+#### Посилання на задеплоєний проєкт:
+```bash
+https://backend-lab1-nk3v.onrender.com/
+```
