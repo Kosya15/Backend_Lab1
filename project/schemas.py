@@ -19,7 +19,3 @@ class RecordSchema(Schema):
 class RecordQuerySchema(Schema):
     user_id = fields.Str()
     category_id = fields.Str()
-
-
-# class CustomExpenseCategorySchema(Schema):
-#     name = fields.Str(required=True)
