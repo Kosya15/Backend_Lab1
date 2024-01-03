@@ -1,129 +1,155 @@
-import uuid
 from flask import Flask, jsonify, request
 from datetime import date
-from project import app
+from project import app, db
+from project.models import UserModel, RecordModel, CategoryModel
+from project.schemas import UserSchema, RecordSchema, CategorySchema
+from marshmallow import ValidationError
+from sqlalchemy.exc import IntegrityError
 
-users = {}
-categories = {}
-records = {}
+
+with app.app_context():
+    db.create_all()
+    db.create_all()
+    db.session.commit()
 
 
 @app.route("/user/<user_id>", methods=["GET"])
 def get_user(user_id):
-    if user_id in users.keys():
-        return jsonify(users[user_id]), 200
-    else:
-        return jsonify({}), 400
+    user = UserModel.query.get_or_404(user_id)
+    return {
+            "id": user.id, 
+            "name": user.name
+            }
 
 
 @app.route("/user/<user_id>", methods=["DELETE"])
 def delete_user(user_id):
-    if user_id in users.keys():
-        user = users[user_id]
-        del users[user_id]
-        return jsonify(user), 200
-    else:
-        return jsonify({}), 400
+    user = UserModel.query.get_or_404(user_id)
+    db.session.delete(user)
+    db.session.commit()
+    return {
+            "message": f"User {user_id} successfully deleted!"
+            }
 
 
 @app.route("/user", methods=["POST"])
 def create_user():
     user_data = request.get_json()
-    user_id = uuid.uuid4().hex
-    user = {"id": user_id, **user_data}
-    users[user_id] = user
-    return jsonify(user), 200
+    valid = UserSchema()
+    try:
+        valid.load(user_data)
+    except ValidationError as error:
+        return jsonify({'error': error.messages}), 400
+    user = UserModel(name=user_data["name"])
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except IntegrityError:
+        return "Error! Entered data is incorrect.", 400
+    user_info = {"id": user.id, "name": user.name}
+    return jsonify(user_info), 200
 
 
 @app.route("/users", methods=["GET"])
 def get_users():
-    return jsonify(list(users.values())), 200
+    return list({"id": user.id, "name": user.name} for user in UserModel.query.all())
 
 
 @app.route("/category", methods=["GET"])
 def get_category():
     category_id = request.args.get("id")
-    if category_id in categories.keys():
-        return categories[category_id], 200
-    else:
-        return jsonify({}), 400
+    category = CategoryModel.query.get_or_404(category_id)
+    return {"id": category.id, "name": category.name}
 
 
 @app.route("/category", methods=["POST"])
 def create_category():
-    new_category_name = request.args.get("name")
-    new_category_id = uuid.uuid4().hex
-    new_category = {
-        "name": new_category_name,
-        "id": new_category_id
-    }
-    categories[new_category_id] = new_category
-    return jsonify(new_category), 200
+    category_data = request.args
+    valid = CategorySchema()
+    try:
+        valid.load(category_data)
+    except ValidationError as error:
+        return jsonify({'error': error.messages}), 400
+    category = CategoryModel(name=category_data["name"])
+    try:
+        db.session.add(category)
+        db.session.commit()
+    except IntegrityError:
+        return "Error! Entered data is incorrect.", 400
+    
+    return jsonify({"id": category.id, "name": category.name}), 200
 
 
 @app.route("/category", methods=["DELETE"])
 def delete_category():
     category_id = request.args.get("id")
-    if category_id in categories.keys():
-        category = categories[category_id]
-        del categories[category_id]
-        return jsonify(category), 200
-    else:
-        return jsonify({}), 400
+    category = CategoryModel.query.get_or_404(category_id)
+    db.session.delete(category)
+    db.session.commit()
+    return {"message": f"Category {category_id} successfully deleted!"}
 
 
 @app.route("/record/<int:record_id>", methods=["GET"])
 def get_record(record_id):
-    if record_id in records.keys():
-        return records[record_id], 200
-    else:
-        return jsonify({}), 400
+    record = RecordModel.query.get_or_404(record_id)
+    response = {
+        "id": record.id,
+        "user_id": record.user_id,
+        "category_id": record.category_id,
+        "creation_date": record.creation_date,
+        "sum": record.sum
+    }
+    return response, 200
 
 
 @app.route("/record/<int:record_id>", methods=["DELETE"])
 def delete_record(record_id):
-    if record_id in records.keys():
-        record = records[record_id]
-        del records[record_id]
-        return jsonify(record), 200
-    else:
-        return jsonify({}), 400
+    record = RecordModel.query.get_or_404(record_id)
+    db.session.delete(record)
+    db.session.commit()
+    return {"message": f"Record {record_id} successfully deleted!"}
 
 
 @app.route("/record", methods=["POST"])
 def create_record():
-    new_record_id = uuid.uuid4().hex
-    new_record = {
-        "id": new_record_id,
-        "user_id": request.args.get("user_id"),
-        "category_id": request.args.get("category_id"),
-        "creation_date": date.today(),
-        "sum": request.args.get("sum")
+    record_data = request.args
+    valid = RecordSchema()
+    try:
+        valid.load(record_data)
+    except ValidationError as error:
+        return jsonify({'error': error.messages}), 400
+    record = RecordModel(sum=record_data["sum"], user_id=record_data["user_id"], category_id=record_data["category_id"])
+    try:
+        db.session.add(record)
+        db.session.commit()
+    except IntegrityError:
+        return "Error! Entered data is incorrect.", 400
+    response = {
+        "id": record.id,
+        "user_id": record.user_id,
+        "category_id": record.category_id,
+        "creation_date": record.creation_date,
+        "sum": record.sum
     }
-    records[new_record_id] = new_record
-    return jsonify(new_record), 200
+    return response, 200
 
 
 @app.route("/record", methods=["GET"])
 def get_filtered_records():
-    category_id = request.args.get('category_id')
-    user_id = request.args.get('user_id')
-    result = []
-    if not category_id and not user_id:
-        return jsonify({"Error": "Enter at least one argument: category_id or user_id"}), 400
-    if not user_id:
-        for record in records.values():
-            if record["category_id"] == category_id:
-                result.append(record)
-    elif not category_id:
-        for record in records.values():
-            if record["user_id"] == user_id:
-                result.append(record)
-    else:
-        for record in records.values():
-            if record["user_id"] == user_id and record["category_id"] == category_id:
-                result.append(record)
-    return jsonify(result), 200
+    ctg_Id = request.args.get('category_id')
+    us_Id = request.args.get('user_id')
+    records = []
+    if not ctg_Id and not us_Id:
+        return "Enter at least one argument: category_id or user_id", 400
+    if not us_Id:
+        records = RecordModel.query.filter_by(category_id=ctg_Id)
+    if not ctg_Id:
+        records = RecordModel.query.filter_by(user_id=us_Id)
+    if ctg_Id and us_Id:
+        records = RecordModel.query.filter_by(category_id=ctg_Id, user_id=us_Id)
+    return list({"id": record.id, "user_id": record.user_id, "category_id": record.category_id, "creation_date": record.creation_date, "sum": record.sum} for record in records), 200
+
+
 
 
 @app.route("/")
