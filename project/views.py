@@ -45,7 +45,7 @@ def create_user():
         db.session.add(user)
         db.session.commit()
     except IntegrityError:
-        return "Error! Entered data is incorrect.", 400
+        return "Error! The entered data is repeated.", 400
     user_info = {"id": user.id, "name": user.name}
     return jsonify(user_info), 200
 
@@ -62,20 +62,40 @@ def get_category():
     return {"id": category.id, "name": category.name}
 
 
+@app.route("/categories", methods=["GET"])
+def get_categories():
+    user_id = request.args.get("user_id")
+    
+    if user_id is not None:
+        categories = CategoryModel.query.filter_by(is_custom=True, user_id=user_id).all()
+    else:
+        categories = CategoryModel.query.filter_by(is_custom=False).all()
+    
+    return jsonify([{"id": category.id, "name": category.name, "is_custom": category.is_custom} for category in categories]), 200
+
 @app.route("/category", methods=["POST"])
 def create_category():
     category_data = request.args
     valid = CategorySchema()
+    
     try:
         valid.load(category_data)
     except ValidationError as error:
         return jsonify({'error': error.messages}), 400
-    category = CategoryModel(name=category_data["name"])
+    
+    name = category_data["name"]
+    user_id = category_data.get("user_id")
+    
+    if user_id is not None:
+        category = CategoryModel(name=name, is_custom=True, user_id=user_id)
+    else:
+        category = CategoryModel(name=name, is_custom=False)
+    
     try:
         db.session.add(category)
         db.session.commit()
     except IntegrityError:
-        return "Error! Entered data is incorrect.", 400
+        return "Error! The entered data is repeated.", 400
     
     return jsonify({"id": category.id, "name": category.name}), 200
 
@@ -123,7 +143,7 @@ def create_record():
         db.session.add(record)
         db.session.commit()
     except IntegrityError:
-        return "Error! Entered data is incorrect.", 400
+        return "Error! The entered data is incorrect.", 400
     response = {
         "id": record.id,
         "user_id": record.user_id,
@@ -148,8 +168,6 @@ def get_filtered_records():
     if ctg_Id and us_Id:
         records = RecordModel.query.filter_by(category_id=ctg_Id, user_id=us_Id)
     return list({"id": record.id, "user_id": record.user_id, "category_id": record.category_id, "creation_date": record.creation_date, "sum": record.sum} for record in records), 200
-
-
 
 
 @app.route("/")
